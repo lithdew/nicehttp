@@ -136,11 +136,28 @@ func (c *Client) download(w Writer, url string, contentLength int, acceptsRanges
 		return nil
 	}
 
-	if err := c.Download(w, url); err != nil {
+	if err := c.DownloadSerially(w, url); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// DownloadSerially serially downloads the contents of url and writes it to w.
+func (c *Client) DownloadSerially(w io.Writer, url string) error {
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	res := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(res)
+
+	req.SetRequestURI(url)
+
+	if err := c.Do(req, res); err != nil {
+		return fmt.Errorf("failed to download %q: %w", url, err)
+	}
+
+	return res.BodyWriteTo(w)
 }
 
 // DownloadInChunks downloads file at url comprised of length bytes in chunks using multiple workers, and stores it in
@@ -211,21 +228,4 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 	}
 
 	return nil
-}
-
-// Download contents of url and write it to w.
-func (c *Client) Download(w io.Writer, url string) error {
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(res)
-
-	req.SetRequestURI(url)
-
-	if err := c.Do(req, res); err != nil {
-		return fmt.Errorf("failed to download %q: %w", url, err)
-	}
-
-	return res.BodyWriteTo(w)
 }

@@ -44,13 +44,13 @@ func DownloadFile(filename, url string) error {
 	return defaultClient.DownloadFile(filename, url)
 }
 
+// DownloadSerially contents of url and writes it to w.
+func DownloadSerially(w io.Writer, url string) error {
+	return defaultClient.DownloadSerially(w, url)
+}
+
 // DownloadInChunks downloads file at url comprised of length bytes in chunks using multiple workers, and stores it in
 // writer w.
 func DownloadInChunks(w io.WriterAt, url string, length int) error {
 	return defaultClient.DownloadInChunks(w, url, length)
-}
-
-// Download contents of url and write it to w.
-func Download(w io.Writer, url string) error {
-	return defaultClient.Download(w, url)
 }
