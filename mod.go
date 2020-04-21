@@ -25,18 +25,23 @@ func Do(req *fasthttp.Request, res *fasthttp.Response) error {
 	return DefaultClient.Do(req, res)
 }
 
-func DownloadFile(filename, url string) error {
-	return DefaultClient.DownloadFile(filename, url)
-}
-
+// QueryHeaders queries headers from url via a HTTP HEAD request, and populates dst with its contents.
 func QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
 	return DefaultClient.QueryHeaders(dst, url)
 }
 
-func Download(w io.Writer, url string) error {
-	return DefaultClient.Download(w, url)
+// DownloadFile downloads of url, and writes its contents to a newly-created file titled filename.
+func DownloadFile(filename, url string) error {
+	return DefaultClient.DownloadFile(filename, url)
 }
 
+// DownloadInChunks downloads file at url comprised of length bytes in cs byte-sized chunks using w goroutines, and
+// store it in file f.
 func DownloadInChunks(f io.WriterAt, url string, length, w, cs int) error {
 	return DefaultClient.DownloadInChunks(f, url, length, w, cs)
+}
+
+// Download contents of url and write it to w.
+func Download(w io.Writer, url string) error {
+	return DefaultClient.Download(w, url)
 }

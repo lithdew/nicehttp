@@ -56,6 +56,30 @@ func (c *Client) Do(req *fasthttp.Request, res *fasthttp.Response) error {
 	return errors.New("redirected too many times")
 }
 
+// QueryHeaders queries headers from url via a HTTP HEAD request, and populates dst with its contents.
+func (c *Client) QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
+	if dst == nil {
+		return errors.New("dst must not be nil")
+	}
+
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	res := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(res)
+
+	req.Header.SetMethod(fasthttp.MethodHead)
+	req.SetRequestURI(url)
+
+	if err := c.Do(req, res); err != nil {
+		return fmt.Errorf("failed to call HEAD on url %q: %w", url, err)
+	}
+
+	res.Header.CopyTo(dst)
+
+	return nil
+}
+
 // DownloadFile downloads of url, and writes its contents to a newly-created file titled filename.
 func (c *Client) DownloadFile(filename, url string) error {
 	f, err := os.Create(filename)
@@ -86,47 +110,6 @@ func (c *Client) DownloadFile(filename, url string) error {
 	}
 
 	return c.Download(f, url)
-}
-
-// QueryHeaders queries headers from url via a HTTP HEAD request, and populates dst with its contents.
-func (c *Client) QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
-	if dst == nil {
-		return errors.New("dst must not be nil")
-	}
-
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(res)
-
-	req.Header.SetMethod(fasthttp.MethodHead)
-	req.SetRequestURI(url)
-
-	if err := c.Do(req, res); err != nil {
-		return fmt.Errorf("failed to call HEAD on url %q: %w", url, err)
-	}
-
-	res.Header.CopyTo(dst)
-
-	return nil
-}
-
-// Download contents of url and write it to w.
-func (c *Client) Download(w io.Writer, url string) error {
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(res)
-
-	req.SetRequestURI(url)
-
-	if err := c.Do(req, res); err != nil {
-		return fmt.Errorf("failed to download %q: %w", url, err)
-	}
-
-	return res.BodyWriteTo(w)
 }
 
 // DownloadInChunks downloads file at url comprised of length bytes in cs byte-sized chunks using w goroutines, and
@@ -197,4 +180,21 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length, w, cs int) 
 	}
 
 	return nil
+}
+
+// Download contents of url and write it to w.
+func (c *Client) Download(w io.Writer, url string) error {
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	res := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(res)
+
+	req.SetRequestURI(url)
+
+	if err := c.Do(req, res); err != nil {
+		return fmt.Errorf("failed to download %q: %w", url, err)
+	}
+
+	return res.BodyWriteTo(w)
 }
