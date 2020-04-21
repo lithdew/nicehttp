@@ -79,37 +79,11 @@ func (c *Client) QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
 
 // DownloadBytes downloads the contents of url, and returns them as a byte slice.
 func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
-	headers := acquireResponseHeaders()
-	defer releaseResponseHeaders(headers)
-
-	var (
-		length        int
-		acceptsRanges bool
-	)
-
-	if err := c.QueryHeaders(headers, url); err == nil {
-		if contentLength := headers.ContentLength(); contentLength > 0 {
-			length = contentLength
-		}
-
-		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
-	}
+	length, acceptsRanges := c.learn(url)
 
 	w := NewWriteBuffer(bytesutil.ExtendSlice(dst, length))
 
-	if c.AcceptsRanges && acceptsRanges {
-		if length <= 0 {
-			return w.dst, fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
-		}
-
-		if err := c.DownloadInChunks(w, url, length); err != nil {
-			return w.dst, err
-		}
-
-		return w.dst, nil
-	}
-
-	if err := c.Download(w, url); err != nil {
+	if err := c.download(w, url, length, acceptsRanges); err != nil {
 		return w.dst, err
 	}
 
@@ -118,37 +92,44 @@ func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
 
 // DownloadFile downloads the contents of url, and writes its contents to a newly-created file titled filename.
 func (c *Client) DownloadFile(filename, url string) error {
-	headers := acquireResponseHeaders()
-	defer releaseResponseHeaders(headers)
-
-	var (
-		length        int
-		acceptsRanges bool
-	)
-
-	if err := c.QueryHeaders(headers, url); err == nil {
-		if contentLength := headers.ContentLength(); contentLength > 0 {
-			length = contentLength
-		}
-
-		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
-	}
+	contentLength, acceptsRanges := c.learn(url)
 
 	w, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open dest file: %w", err)
 	}
 
-	if err := w.Truncate(int64(length)); err != nil {
-		return fmt.Errorf("failed to truncate file to %d byte(s): %w", length, err)
+	if err := w.Truncate(int64(contentLength)); err != nil {
+		return fmt.Errorf("failed to truncate file to %d byte(s): %w", contentLength, err)
 	}
 
-	if c.AcceptsRanges && acceptsRanges {
-		if length <= 0 {
-			return fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
+	return c.download(w, url, contentLength, acceptsRanges)
+}
+
+// learn learns from url its content length, and if it accepts parallel chunk fetching.
+func (c *Client) learn(url string) (contentLength int, acceptsRanges bool) {
+	headers := acquireResponseHeaders()
+	defer releaseResponseHeaders(headers)
+
+	if err := c.QueryHeaders(headers, url); err == nil {
+		if contentLength = headers.ContentLength(); contentLength <= 0 {
+			contentLength = 0
 		}
 
-		if err := c.DownloadInChunks(w, url, length); err != nil {
+		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
+	}
+
+	return contentLength, acceptsRanges
+}
+
+// download downloads url and writes its contents to w.
+func (c *Client) download(w Writer, url string, contentLength int, acceptsRanges bool) error {
+	if c.AcceptsRanges && acceptsRanges {
+		if contentLength <= 0 {
+			return fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", contentLength)
+		}
+
+		if err := c.DownloadInChunks(w, url, contentLength); err != nil {
 			return err
 		}
 

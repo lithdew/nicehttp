@@ -7,10 +7,14 @@ import (
 
 var (
 	_ io.Writer = (*WriterAtOffset)(nil)
-
-	_ io.Writer   = (*WriteBuffer)(nil)
-	_ io.WriterAt = (*WriteBuffer)(nil)
+	_ Writer    = (*WriteBuffer)(nil)
 )
+
+// Writer implements io.Writer and io.WriterAt.
+type Writer interface {
+	io.Writer
+	io.WriterAt
+}
 
 // WriterAtOffset implements io.Writer for a given io.WriterAt at an offset.
 type WriterAtOffset struct {
@@ -28,7 +32,7 @@ func (w WriterAtOffset) Write(b []byte) (int, error) {
 	return w.dst.WriteAt(b, w.offset)
 }
 
-// WriteBuffer implements io.Writer and io.WriteAt on an optionally-provided byte slice.
+// WriteBuffer implements io.Writer and io.WriterAt on an optionally-provided byte slice.
 type WriteBuffer struct {
 	dst []byte
 }
@@ -44,7 +48,7 @@ func (b *WriteBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// WriteAt implements io.WriteAt.
+// WriteAt implements io.WriterAt.
 func (b *WriteBuffer) WriteAt(p []byte, off int64) (int, error) {
 	b.dst = bytesutil.ExtendSlice(b.dst, int(off)+len(p))
 	return copy(b.dst[off:], p), nil
