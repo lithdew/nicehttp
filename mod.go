@@ -33,6 +33,18 @@ func Do(req *fasthttp.Request, res *fasthttp.Response) error {
 	return defaultClient.Do(req, res)
 }
 
+// DoTimeout sends a HTTP request prescribed in req and populates its results into res. It additionally handles
+// redirects unlike the de-facto Do(req, res) method in fasthttp. It overrides the default timeout set.
+func DoTimeout(req *fasthttp.Request, res *fasthttp.Response, timeout time.Duration) error {
+	return defaultClient.DoTimeout(req, res, timeout)
+}
+
+// DoDeadline sends a HTTP request prescribed in req and populates its results into res. It additionally handles
+// redirects unlike the de-facto Do(req, res) method in fasthttp. It overrides the default timeout set with a deadline.
+func DoDeadline(req *fasthttp.Request, res *fasthttp.Response, deadline time.Time) error {
+	return defaultClient.DoDeadline(req, res, deadline)
+}
+
 // QueryHeaders queries headers from url via a HTTP HEAD request, and populates dst with its contents.
 func QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
 	return defaultClient.QueryHeaders(dst, url)

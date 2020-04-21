@@ -35,8 +35,20 @@ type Client struct {
 // Do sends a HTTP request prescribed in req and populates its results into res. It additionally handles redirects
 // unlike the de-facto Do(req, res) method in fasthttp.
 func (c *Client) Do(req *fasthttp.Request, res *fasthttp.Response) error {
+	return c.DoTimeout(req, res, c.Timeout)
+}
+
+// DoTimeout sends a HTTP request prescribed in req and populates its results into res. It additionally handles
+// redirects unlike the de-facto Do(req, res) method in fasthttp. It overrides the default timeout set.
+func (c *Client) DoTimeout(req *fasthttp.Request, res *fasthttp.Response, timeout time.Duration) error {
+	return c.DoDeadline(req, res, time.Now().Add(timeout))
+}
+
+// DoDeadline sends a HTTP request prescribed in req and populates its results into res. It additionally handles
+// redirects unlike the de-facto Do(req, res) method in fasthttp. It overrides the default timeout set with a deadline.
+func (c *Client) DoDeadline(req *fasthttp.Request, res *fasthttp.Response, deadline time.Time) error {
 	for i := 0; i <= c.MaxRedirectCount; i++ {
-		if err := c.Instance.DoTimeout(req, res, c.Timeout); err != nil {
+		if err := c.Instance.DoDeadline(req, res, deadline); err != nil {
 			return err
 		}
 
@@ -167,6 +179,11 @@ func (c *Client) DownloadSerially(w io.Writer, url string) error {
 // DownloadInChunks downloads file at url comprised of length bytes in chunks using multiple workers, and stores it in
 // writer w.
 func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
+	deadline := time.Now().Add(c.Timeout)
+
+	timeout := fasthttp.AcquireTimer(c.Timeout)
+	defer fasthttp.ReleaseTimer(timeout)
+
 	var g errgroup.Group
 
 	// ByteRange represents a byte range.
@@ -191,7 +208,7 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 			for r := range ch {
 				req.Header.SetByteRange(r.Start, r.End)
 
-				if err := c.Do(req, res); err != nil {
+				if err := c.DoDeadline(req, res, deadline); err != nil {
 					return fmt.Errorf("worker %d failed to get bytes range (start: %d, end: %d): %w", i, r.Start, r.End, err)
 				}
 
@@ -206,11 +223,9 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 
 	// Fill up ch with byte ranges to be download from url.
 
-	timeout := fasthttp.AcquireTimer(c.Timeout)
-	defer fasthttp.ReleaseTimer(timeout)
-
 	var r ByteRange
 
+Feed:
 	for r.End < length {
 		r.End += c.ChunkSize
 		if r.End > length {
@@ -218,9 +233,9 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 		}
 
 		select {
-		case ch <- r:
 		case <-timeout.C:
-			return fmt.Errorf("timed out after %s: %w", c.Timeout, fasthttp.ErrTimeout)
+			break Feed
+		case ch <- r:
 		}
 
 		r.Start += c.ChunkSize
