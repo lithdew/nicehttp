@@ -12,8 +12,8 @@ import (
 
 // Client wraps over fasthttp.Client a couple of useful helper functions.
 type Client struct {
-	// Client is the underlying instance which nicehttp.Client wraps around.
-	Client fasthttp.Client
+	// The underlying instance which nicehttp.Client wraps around.
+	Instance fasthttp.Client
 
 	// Decide whether or not URLs that accept being downloaded in parallel chunks are handled with multiple workers.
 	AcceptsRanges bool
@@ -32,7 +32,7 @@ type Client struct {
 // unlike the de-facto Do(req, res) method in fasthttp.
 func (c *Client) Do(req *fasthttp.Request, res *fasthttp.Response) error {
 	for i := 0; i <= c.MaxRedirectCount; i++ {
-		if err := c.Client.Do(req, res); err != nil {
+		if err := c.Instance.Do(req, res); err != nil {
 			return err
 		}
 
