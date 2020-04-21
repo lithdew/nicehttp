@@ -88,7 +88,10 @@ func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
 	)
 
 	if err := c.QueryHeaders(headers, url); err == nil {
-		length = headers.ContentLength()
+		if contentLength := headers.ContentLength(); contentLength > 0 {
+			length = contentLength
+		}
+
 		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
 	}
 
@@ -124,7 +127,10 @@ func (c *Client) DownloadFile(filename, url string) error {
 	)
 
 	if err := c.QueryHeaders(headers, url); err == nil {
-		length = headers.ContentLength()
+		if contentLength := headers.ContentLength(); contentLength > 0 {
+			length = contentLength
+		}
+
 		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
 	}
 
