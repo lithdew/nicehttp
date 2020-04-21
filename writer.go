@@ -49,3 +49,8 @@ func (b *WriteBuffer) WriteAt(p []byte, off int64) (int, error) {
 	b.dst = bytesutil.ExtendSlice(b.dst, int(off)+len(p))
 	return copy(b.dst[off:], p), nil
 }
+
+// Bytes returns the underlying byte slice.
+func (b *WriteBuffer) Bytes() []byte {
+	return b.dst
+}

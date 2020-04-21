@@ -99,21 +99,21 @@ func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
 
 	if c.AcceptsRanges && acceptsRanges {
 		if length <= 0 {
-			return dst, fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
+			return w.dst, fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
 		}
 
 		if err := c.DownloadInChunks(w, url, length); err != nil {
-			return dst, err
+			return w.dst, err
 		}
 
-		return dst, nil
+		return w.dst, nil
 	}
 
 	if err := c.Download(w, url); err != nil {
-		return dst, err
+		return w.dst, err
 	}
 
-	return dst, nil
+	return w.dst, nil
 }
 
 // DownloadFile downloads the contents of url, and writes its contents to a newly-created file titled filename.
