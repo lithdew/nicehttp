@@ -79,11 +79,11 @@ func (c *Client) QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
 
 // DownloadBytes downloads the contents of url, and returns them as a byte slice.
 func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
-	length, acceptsRanges := c.learn(url)
+	contentLength, acceptsRanges := c.learn(url)
 
-	w := NewWriteBuffer(bytesutil.ExtendSlice(dst, length))
+	w := NewWriteBuffer(bytesutil.ExtendSlice(dst, contentLength))
 
-	if err := c.download(w, url, length, acceptsRanges); err != nil {
+	if err := c.download(w, url, contentLength, acceptsRanges); err != nil {
 		return w.dst, err
 	}
 
