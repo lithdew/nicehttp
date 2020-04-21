@@ -82,26 +82,31 @@ func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
 	headers := acquireResponseHeaders()
 	defer releaseResponseHeaders(headers)
 
-	if err := c.QueryHeaders(headers, url); err == nil {
-		acceptsRanges := bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
+	var (
+		length        int
+		acceptsRanges bool
+	)
 
-		length := headers.ContentLength()
-		if (acceptsRanges && length <= 0) || length < 0 {
+	if err := c.QueryHeaders(headers, url); err == nil {
+		length = headers.ContentLength()
+		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
+	}
+
+	w := NewWriteBuffer(bytesutil.ExtendSlice(dst, length))
+
+	if c.AcceptsRanges && acceptsRanges {
+		if length <= 0 {
 			return dst, fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
 		}
 
-		dst = bytesutil.ExtendSlice(dst, length)
-
-		if c.AcceptsRanges && acceptsRanges {
-			if err := c.DownloadInChunks(NewWriteBuffer(dst), url, length); err != nil {
-				return dst, err
-			}
-
-			return dst, nil
+		if err := c.DownloadInChunks(w, url, length); err != nil {
+			return dst, err
 		}
+
+		return dst, nil
 	}
 
-	if err := c.Download(NewWriteBuffer(dst), url); err != nil {
+	if err := c.Download(w, url); err != nil {
 		return dst, err
 	}
 
@@ -110,32 +115,45 @@ func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
 
 // DownloadFile downloads the contents of url, and writes its contents to a newly-created file titled filename.
 func (c *Client) DownloadFile(filename, url string) error {
-	f, err := os.Create(filename)
+	headers := acquireResponseHeaders()
+	defer releaseResponseHeaders(headers)
+
+	var (
+		length        int
+		acceptsRanges bool
+	)
+
+	if err := c.QueryHeaders(headers, url); err == nil {
+		length = headers.ContentLength()
+		acceptsRanges = bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
+	}
+
+	w, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open dest file: %w", err)
 	}
 
-	headers := acquireResponseHeaders()
-	defer releaseResponseHeaders(headers)
+	if err := w.Truncate(int64(length)); err != nil {
+		return fmt.Errorf("failed to truncate file to %d byte(s): %w", length, err)
+	}
 
-	if err := c.QueryHeaders(headers, url); err == nil {
-		acceptsRanges := bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
-
-		length := headers.ContentLength()
-		if (acceptsRanges && length <= 0) || length < 0 {
+	if c.AcceptsRanges && acceptsRanges {
+		if length <= 0 {
 			return fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
 		}
 
-		if err := f.Truncate(int64(length)); err != nil {
-			return fmt.Errorf("failed to truncate file to %d byte(s): %w", length, err)
+		if err := c.DownloadInChunks(w, url, length); err != nil {
+			return err
 		}
 
-		if c.AcceptsRanges && acceptsRanges {
-			return c.DownloadInChunks(f, url, length)
-		}
+		return nil
 	}
 
-	return c.Download(f, url)
+	if err := c.Download(w, url); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // DownloadInChunks downloads file at url comprised of length bytes in chunks using multiple workers, and stores it in
