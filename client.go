@@ -10,13 +10,10 @@ import (
 	"os"
 )
 
-// Client wraps over fasthttp.Client a couple of nice, useful helper functions.
+// Client wraps over fasthttp.Client a couple of useful helper functions.
 type Client struct {
 	// Client is the underlying instance which nicehttp.Client wraps around.
 	Client fasthttp.Client
-
-	// Decide whether or not files downloaded should have their size pre-allocated.
-	Preallocate bool
 
 	// Decide whether or not URLs that accept being downloaded in parallel chunks are handled with multiple workers.
 	AcceptsRanges bool
@@ -25,7 +22,7 @@ type Client struct {
 	NumWorkers int
 
 	// Size of individual byte chunks downloaded.
-	RangeSize int
+	ChunkSize int
 
 	// Max number of redirects to follow before a request is marked to have failed.
 	MaxRedirectCount int
@@ -80,7 +77,38 @@ func (c *Client) QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
 	return nil
 }
 
-// DownloadFile downloads of url, and writes its contents to a newly-created file titled filename.
+// DownloadBytes downloads the contents of url, and returns them as a byte slice.
+func (c *Client) DownloadBytes(dst []byte, url string) ([]byte, error) {
+	headers := acquireResponseHeaders()
+	defer releaseResponseHeaders(headers)
+
+	if err := c.QueryHeaders(headers, url); err == nil {
+		acceptsRanges := bytesutil.String(headers.Peek("Accept-Ranges")) == "bytes"
+
+		length := headers.ContentLength()
+		if (acceptsRanges && length <= 0) || length < 0 {
+			return dst, fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
+		}
+
+		dst = bytesutil.ExtendSlice(dst, length)
+
+		if c.AcceptsRanges && acceptsRanges {
+			if err := c.DownloadInChunks(NewWriteBuffer(dst), url, length); err != nil {
+				return dst, err
+			}
+
+			return dst, nil
+		}
+	}
+
+	if err := c.Download(NewWriteBuffer(dst), url); err != nil {
+		return dst, err
+	}
+
+	return dst, nil
+}
+
+// DownloadFile downloads the contents of url, and writes its contents to a newly-created file titled filename.
 func (c *Client) DownloadFile(filename, url string) error {
 	f, err := os.Create(filename)
 	if err != nil {
@@ -98,33 +126,31 @@ func (c *Client) DownloadFile(filename, url string) error {
 			return fmt.Errorf("content length is %d - see doc for (*fasthttp.ResponseHeader).ContentLength()", length)
 		}
 
-		if c.Preallocate {
-			if err := f.Truncate(int64(length)); err != nil {
-				return fmt.Errorf("failed to truncate file to %d byte(s): %w", length, err)
-			}
+		if err := f.Truncate(int64(length)); err != nil {
+			return fmt.Errorf("failed to truncate file to %d byte(s): %w", length, err)
 		}
 
 		if c.AcceptsRanges && acceptsRanges {
-			return c.DownloadInChunks(f, url, length, c.NumWorkers, c.RangeSize)
+			return c.DownloadInChunks(f, url, length)
 		}
 	}
 
 	return c.Download(f, url)
 }
 
-// DownloadInChunks downloads file at url comprised of length bytes in cs byte-sized chunks using w goroutines, and
-// store it in file f.
-func (c *Client) DownloadInChunks(f io.WriterAt, url string, length, w, cs int) error {
+// DownloadInChunks downloads file at url comprised of length bytes in chunks using multiple workers, and stores it in
+// writer w.
+func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 	var g errgroup.Group
 
 	// ByteRange represents a byte range.
 	type ByteRange struct{ Start, End int }
 
-	ch := make(chan ByteRange, w)
+	ch := make(chan ByteRange, c.NumWorkers)
 
 	// Spawn w workers that will dispatch and execute byte range-inclusive HTTP requests.
 
-	for i := 0; i < w; i++ {
+	for i := 0; i < c.NumWorkers; i++ {
 		i := i
 
 		g.Go(func() error {
@@ -143,7 +169,7 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length, w, cs int) 
 					return fmt.Errorf("worker %d failed to get bytes range (start: %d, end: %d): %w", i, r.Start, r.End, err)
 				}
 
-				if err := res.BodyWriteTo(&WriterAtOffset{Src: f, Offset: int64(r.Start)}); err != nil {
+				if err := res.BodyWriteTo(NewWriterAtOffset(f, int64(r.Start))); err != nil {
 					return fmt.Errorf("worker %d failed to write to file at offset %d: %w", i, r.Start, err)
 				}
 			}
@@ -157,14 +183,14 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length, w, cs int) 
 	var r ByteRange
 
 	for r.End < length {
-		r.End += cs
+		r.End += c.ChunkSize
 		if r.End > length {
 			r.End = length
 		}
 
 		ch <- r
 
-		r.Start += cs
+		r.Start += c.ChunkSize
 		if r.Start > length {
 			r.Start = length
 		}

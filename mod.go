@@ -10,11 +10,9 @@ import (
 
 // DefaultClient is a nicehttp.Client with sane configuration defaults.
 var DefaultClient = Client{
-	Preallocate: true,
-
 	AcceptsRanges: true,
 	NumWorkers:    runtime.NumCPU(),
-	RangeSize:     10 * 1024 * 1024,
+	ChunkSize:     10 * 1024 * 1024,
 
 	MaxRedirectCount: 16,
 }
@@ -30,15 +28,20 @@ func QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
 	return DefaultClient.QueryHeaders(dst, url)
 }
 
+// DownloadBytes downloads the contents of url, and returns them as a byte slice.
+func DownloadBytes(dst []byte, url string) ([]byte, error) {
+	return DefaultClient.DownloadBytes(dst, url)
+}
+
 // DownloadFile downloads of url, and writes its contents to a newly-created file titled filename.
 func DownloadFile(filename, url string) error {
 	return DefaultClient.DownloadFile(filename, url)
 }
 
-// DownloadInChunks downloads file at url comprised of length bytes in cs byte-sized chunks using w goroutines, and
-// store it in file f.
-func DownloadInChunks(f io.WriterAt, url string, length, w, cs int) error {
-	return DefaultClient.DownloadInChunks(f, url, length, w, cs)
+// DownloadInChunks downloads file at url comprised of length bytes in chunks using multiple workers, and stores it in
+// writer w.
+func DownloadInChunks(w io.WriterAt, url string, length int) error {
+	return DefaultClient.DownloadInChunks(w, url, length)
 }
 
 // Download contents of url and write it to w.
