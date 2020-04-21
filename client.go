@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
+	"time"
 )
 
 // Client wraps over fasthttp.Client a couple of useful helper functions.
@@ -26,13 +27,16 @@ type Client struct {
 
 	// Max number of redirects to follow before a request is marked to have failed.
 	MaxRedirectCount int
+
+	// Max timeout for a single download/fetch.
+	Timeout time.Duration
 }
 
 // Do sends a HTTP request prescribed in req and populates its results into res. It additionally handles redirects
 // unlike the de-facto Do(req, res) method in fasthttp.
 func (c *Client) Do(req *fasthttp.Request, res *fasthttp.Response) error {
 	for i := 0; i <= c.MaxRedirectCount; i++ {
-		if err := c.Instance.Do(req, res); err != nil {
+		if err := c.Instance.DoTimeout(req, res, c.Timeout); err != nil {
 			return err
 		}
 
@@ -187,7 +191,7 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 			for r := range ch {
 				req.Header.SetByteRange(r.Start, r.End)
 
-				if err := fasthttp.Do(req, res); err != nil {
+				if err := c.Do(req, res); err != nil {
 					return fmt.Errorf("worker %d failed to get bytes range (start: %d, end: %d): %w", i, r.Start, r.End, err)
 				}
 
@@ -202,6 +206,9 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 
 	// Fill up ch with byte ranges to be download from url.
 
+	timeout := fasthttp.AcquireTimer(c.Timeout)
+	defer fasthttp.ReleaseTimer(timeout)
+
 	var r ByteRange
 
 	for r.End < length {
@@ -210,7 +217,11 @@ func (c *Client) DownloadInChunks(f io.WriterAt, url string, length int) error {
 			r.End = length
 		}
 
-		ch <- r
+		select {
+		case ch <- r:
+		case <-timeout.C:
+			return fmt.Errorf("timed out after %s: %w", c.Timeout, fasthttp.ErrTimeout)
+		}
 
 		r.Start += c.ChunkSize
 		if r.Start > length {

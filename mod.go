@@ -6,6 +6,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"io"
 	"runtime"
+	"time"
 )
 
 // defaultClient is a nicehttp.Client with sane configuration defaults.
@@ -21,6 +22,9 @@ var defaultClient = Client{
 
 	// Redirect 16 times at most.
 	MaxRedirectCount: 16,
+
+	// Timeout after 10 seconds.
+	Timeout: 10 * time.Second,
 }
 
 // Do sends a HTTP request prescribed in req and populates its results into res. It additionally handles redirects
