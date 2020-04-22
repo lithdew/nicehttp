@@ -10,21 +10,26 @@ import (
 )
 
 // defaultClient is a nicehttp.Client with sane configuration defaults.
-var defaultClient = Client{
-	// Allow for parallel chunk-based downloading.
-	AcceptsRanges: true,
+var defaultClient = NewClient()
 
-	// Default to the number of available CPUs.
-	NumWorkers: runtime.NumCPU(),
+// NewClient instantiates a new nicehttp.Client with sane configuration defaults.
+func NewClient() Client {
+	return Client{
+		// Allow for parallel chunk-based downloading.
+		AcceptsRanges: true,
 
-	// 10 MiB chunks.
-	ChunkSize: 10 * 1024 * 1024,
+		// Default to the number of available CPUs.
+		NumWorkers: runtime.NumCPU(),
 
-	// Redirect 16 times at most.
-	MaxRedirectCount: 16,
+		// 10 MiB chunks.
+		ChunkSize: 10 * 1024 * 1024,
 
-	// Timeout after 10 seconds.
-	Timeout: 10 * time.Second,
+		// Redirect 16 times at most.
+		MaxRedirectCount: 16,
+
+		// Timeout after 10 seconds.
+		Timeout: 10 * time.Second,
+	}
 }
 
 // Do sends a HTTP request prescribed in req and populates its results into res. It additionally handles redirects
