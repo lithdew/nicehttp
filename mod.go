@@ -29,9 +29,14 @@ func DoDeadline(req *fasthttp.Request, res *fasthttp.Response, deadline time.Tim
 	return defaultClient.DoDeadline(req, res, deadline)
 }
 
-// QueryHeaders queries headers from url via a HTTP HEAD request, and populates dst with its contents.
-func QueryHeaders(dst *fasthttp.ResponseHeader, url string) error {
-	return defaultClient.QueryHeaders(dst, url)
+// QueryHeaders learns from url its content length, and if it accepts parallel chunk fetching.
+func QueryHeaders(url string) (contentLength int, acceptsRanges bool) {
+	return defaultClient.QueryHeaders(url)
+}
+
+// Download downloads the contents of url and writes its contents to w.
+func Download(w Writer, url string, contentLength int, acceptsRanges bool) error {
+	return defaultClient.Download(w, url, contentLength, acceptsRanges)
 }
 
 // DownloadBytes downloads the contents of url, and returns them as a byte slice.
