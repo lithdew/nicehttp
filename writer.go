@@ -50,7 +50,9 @@ func (b *WriteBuffer) Write(p []byte) (int, error) {
 
 // WriteAt implements io.WriterAt.
 func (b *WriteBuffer) WriteAt(p []byte, off int64) (int, error) {
-	b.dst = bytesutil.ExtendSlice(b.dst, int(off)+len(p))
+	if min := int(off) + len(p); min > len(b.dst) {
+		b.dst = bytesutil.ExtendSlice(b.dst, min)
+	}
 	return copy(b.dst[off:], p), nil
 }
 
