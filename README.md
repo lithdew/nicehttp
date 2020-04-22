@@ -6,7 +6,7 @@
 
 Package nicehttp contains helper utilities for downloading files/making requests with [valyala/fasthttp](https://github.com/valyala/fasthttp).
 
-- Download a file from a URL serially/in chunks with multiple workers in parallel, should the URL accepts it.
+- Download a file from a URL serially/in chunks with multiple workers in parallel, should the URL allow it.
 - Download contents of a URL and write its contents to a `io.Writer`.
 - Query the headers of a URL using a HTTP head request.
 - Follow redirects provisioned by a URL.
