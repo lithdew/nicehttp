@@ -8,13 +8,21 @@ import (
 	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
+	"runtime"
 	"time"
 )
+
+// Transport represents the interface of a HTTP client supported by nicehttp.
+type Transport interface {
+	Do(req *fasthttp.Request, res *fasthttp.Response) error
+	DoTimeout(req *fasthttp.Request, res *fasthttp.Response, timeout time.Duration) error
+	DoDeadline(req *fasthttp.Request, res *fasthttp.Response, deadline time.Time) error
+}
 
 // Client wraps over fasthttp.Client a couple of useful helper functions.
 type Client struct {
 	// The underlying instance which nicehttp.Client wraps around.
-	Instance fasthttp.Client
+	Instance Transport
 
 	// Decide whether or not URLs that accept being downloaded in parallel chunks are handled with multiple workers.
 	AcceptsRanges bool
@@ -30,6 +38,33 @@ type Client struct {
 
 	// Max timeout for a single download/fetch.
 	Timeout time.Duration
+}
+
+// NewClient instantiates a new nicehttp.Client with sane configuration defaults.
+func NewClient() Client {
+	return Client{
+		// Allow for parallel chunk-based downloading.
+		AcceptsRanges: true,
+
+		// Default to the number of available CPUs.
+		NumWorkers: runtime.NumCPU(),
+
+		// 10 MiB chunks.
+		ChunkSize: 10 * 1024 * 1024,
+
+		// Redirect 16 times at most.
+		MaxRedirectCount: 16,
+
+		// Timeout after 10 seconds.
+		Timeout: 10 * time.Second,
+	}
+}
+
+// WrapClient wraps an existing fasthttp.Client or Transport into a nicehttp.Client.
+func WrapClient(instance Transport) Client {
+	c := NewClient()
+	c.Instance = instance
+	return c
 }
 
 // Do sends a HTTP request prescribed in req and populates its results into res. It additionally handles redirects

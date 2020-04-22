@@ -5,32 +5,11 @@ package nicehttp
 import (
 	"github.com/valyala/fasthttp"
 	"io"
-	"runtime"
 	"time"
 )
 
 // defaultClient is a nicehttp.Client with sane configuration defaults.
 var defaultClient = NewClient()
-
-// NewClient instantiates a new nicehttp.Client with sane configuration defaults.
-func NewClient() Client {
-	return Client{
-		// Allow for parallel chunk-based downloading.
-		AcceptsRanges: true,
-
-		// Default to the number of available CPUs.
-		NumWorkers: runtime.NumCPU(),
-
-		// 10 MiB chunks.
-		ChunkSize: 10 * 1024 * 1024,
-
-		// Redirect 16 times at most.
-		MaxRedirectCount: 16,
-
-		// Timeout after 10 seconds.
-		Timeout: 10 * time.Second,
-	}
-}
 
 // Do sends a HTTP request prescribed in req and populates its results into res. It additionally handles redirects
 // unlike the de-facto Do(req, res) method in fasthttp.
